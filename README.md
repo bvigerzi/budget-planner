@@ -40,7 +40,7 @@ The tool should then be run monthly to generate a report (format TBD) on monthly
 
 The tool should be able to determine if you are consistently overspending in a category (e.g. negative for 3 months or more) and flag it in future reports for evaluation. Constant and significant underspending should also be flagged by the system to review manually. Putting your money to work effectively is just as important as ensuring you are not overspending.
 
-### Irregular Expenses
+#### Irregular Expenses
 
 Yearly expenses (e.g. insurance charged annually, other annual subscriptions) will make a monthly budget look bad. For 11 months out of 12 you will be over-budget in these annual expense categories. There should be a system in place to ensure false positive flags are not generated for irregular fixed expenses.
  
