@@ -18,7 +18,7 @@ First, the budget is determined using [moneysmart's budget planner](https://mone
 
 In our case the monthly expenses statement is in CSV format and has the following structure;
 
-```
+```csv
 Date,Description,Debit,Credit,Balance,Category,Sub-Category
 ```
 
@@ -30,7 +30,7 @@ Firstly, we need to take the budget from the planner above and determine the exp
 
 **monthly_budgetYYYYMMDD.csv** (dated to keep track of budget changes -- tool should take latest budget)
 
-```
+```csv
 category,sub-category,budget
 ```
 
@@ -43,4 +43,47 @@ The tool should be able to determine if you are consistently overspending in a c
 #### Irregular Expenses
 
 Yearly expenses (e.g. insurance charged annually, other annual subscriptions) will make a monthly budget look bad. For 11 months out of 12 you will be over-budget in these annual expense categories. There should be a system in place to ensure false positive flags are not generated for irregular fixed expenses.
- 
+
+#### System Operation (MVP)
+
+- Start of the budget (t=0) begins using earliest monthly statement using the name format: `SpendAccount[A-Z0-9]*_YYYY-MM`
+- At the start of the budget there is no carry from the previous month
+- Each month of generation uses previous monthly statements to determine spending habit flags (non-MVP) and carry budget through to the latest month
+- Running the generator should create a report for the latest month that has a statement (e.g. in April we will have a March statement and figure out how much remains in the budget for each category for April)
+  - Allows to plan spending habits for the coming month by reviewing what is above or below the usual budget allocation
+- When running, the system should find the latest budget allocation using the format discussed above
+  - For months that occurred BEFORE the latest budget (i.e. expense statement from 2022 Feb should use the budget defined up to the end of Feb not after)
+- Report should be printable and have visual cues to highlight over and underspending (e.g. overspending == RED while underspending == GREEN)
+
+#### Future Features (Post-MVP)
+
+- Spending habit flags is NOT MVP
+- Generating report for previous months retroactively (MVP should only generate report for latest reporting month)
+- Habit flag blocklist -- irregular expenses should not be flagged as discussed above
+- Prettify monthly budget report using graphs, etc
+- Gain insights into spending habits to guide how to better utilise income to achieve financial goals
+- Process invoices for finer grain categorisation of spending
+  - e.g. Shopping at Woolies may involve buying cosmetic items (potential sub-category) which could be separated from general groceries into it's own sub-category
+  - Must be able to link an invoice to a debit on the monthly statement to eliminate double-charging
+- Categorise same/similar descriptions to highlight where regular spending occurs (e.g. popular take-out or regularly visit same cinema)
+- Handle adding or removing categories and sub-categories
+
+## Goals
+
+- Lifestyle is rigid but demands flexibility to allow for spontaneous events (important: should try avoid impulsive spending habits) therefore budget should be structured but allow for flexibility on demand
+
+## Report Structure (MVP)
+
+```raw
+                            Monthly Allocation (Budget)   Carry-over    Spend   Remainder
+Category                              X                        Y          Z         A
+            Sub-Categories            X                        Y          Z         A
+
+...
+
+Total                                 XX                       YY         ZZ        AA
+```
+
+- Uncategorised sub-categories will form a unique pseudo sub-category named "Uncategorised". It won't have a monthly allocation but the spend will be subtracted from the main category
+- Uncategorised categories are not supported in the MVP
+  - If uncategorised categories are detected the system will throw an error and ask the user to correct the monthly statement with the error
