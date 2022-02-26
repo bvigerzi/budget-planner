@@ -1,4 +1,5 @@
 SpendAccount*.csv
 monthly_budget*.csv
-report.csv
+report*.csv
+report*.html
 venv

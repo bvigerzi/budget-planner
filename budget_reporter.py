@@ -5,21 +5,14 @@ import glob
 import re
 from dateutil.relativedelta import relativedelta
 from stockholm import Money
+from mako.template import Template
 
-monthly_budget_csv_pattern = "./monthly_budget[0-9]*.csv"
-expenses_statement_csv_pattern = "./SpendAccount[a-zA-Z0-9-]*[0-9]*-[0-9]*.csv"
-
-monthly_budgets = glob.glob(monthly_budget_csv_pattern)
-
-monthly_expenses = glob.glob(expenses_statement_csv_pattern)
 
 def parse_latest_valid_budget(monthly_budgets, statement):
-    statement_date_str = re.search("([0-9]{4}-[0-9]{2})", statement).group(0)
-    statement_date = datetime.strptime(statement_date_str, "%Y-%m") + relativedelta(months=1) - relativedelta(days=1)
+    statement_date = parse_monthly_statement_date(statement)
     latest_valid_budget = None
     for budget in sorted(monthly_budgets):
-        monthly_budget_date_str = re.search("([0-9]{8})", budget).group(0)
-        monthly_budget_date = datetime.strptime(monthly_budget_date_str, "%Y%m%d")
+        monthly_budget_date = parse_monthly_budget_date(budget)
         if monthly_budget_date < statement_date:
             latest_valid_budget = budget
         if latest_valid_budget is None:
@@ -72,45 +65,104 @@ def parse_monthly_statement(statement):
                     parsed_statement[category_name][sub_category_name] = current_total + parsed_debit_amount
     return parsed_statement
 
-def prepare_report_rows(parsed_budget, parsed_statement): # does not include carry-over yet!
+def prepare_report_rows(parsed_budget, parsed_statement, carry, remainder):
     rows = []
-    header_row = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Carry-Over', 'Spend', 'Remainder']
-    rows.append(header_row)
-    for category in parsed_statement:
+    for category in parsed_budget:
         category_budget = category_total(parsed_budget, category)
         category_spend = category_total(parsed_statement, category)
+        category_carry = category_total(carry, category)
+        category_remainder = category_total(remainder, category)
         category_row = [category, "", "", "", "", ""]
         rows.append(category_row)
-        sub_category_dict = parsed_statement[category]
-        for sub_category in sub_category_dict:
-            # TODO: what about when the sub-category is not in the budget? Could we add it without an associated budget (with a note?)
-            sub_category_budget = Money(0, "AUD") if sub_category == "Uncategorised" else parsed_budget[category][sub_category]
-            sub_category_spend: Money = parsed_statement[category][sub_category]
-            sub_category_row = ["", sub_category, sub_category_budget.amount_as_string(), "", sub_category_spend.amount_as_string(), ""] # TODO: carry-over and remainder
+        sub_category_parsed_budget = parsed_budget[category]
+        for sub_category in sub_category_parsed_budget:
+            sub_category_budget = Money(0, "AUD") if sub_category not in parsed_budget[category] else parsed_budget[category][sub_category]
+            sub_category_spend: Money = Money(0, "AUD") if category not in parsed_statement or sub_category not in parsed_statement[category] else parsed_statement[category][sub_category]
+            sub_category_carry: Money = Money(0, "AUD") if sub_category not in carry[category] else carry[category][sub_category]
+            sub_category_remainder: Money = Money(0, "AUD") if sub_category not in remainder[category] else remainder[category][sub_category]
+            sub_category_row = ["", sub_category, sub_category_budget.amount_as_string(), sub_category_carry.amount_as_string(), sub_category_spend.amount_as_string(), sub_category_remainder.amount_as_string()]
             rows.append(sub_category_row)
-        totals_row = ["Total", "", category_budget.amount_as_string(), "", category_spend.amount_as_string(), ""] # TODO: carry-over and remainder
+        totals_row = ["Total", "", category_budget.amount_as_string(), category_carry.amount_as_string(), category_spend.amount_as_string(), category_remainder.amount_as_string()]
         rows.append(totals_row)
     return rows
 
-def category_total(parsed_dict, category_name): # could be budget or statement -- they have the same structure
+def category_total(parsed_dict, category_name):
     sum = Money(0, "AUD")
-    # raises KeyError if the monthly budget does not have a category that is in the statement
-    # should be able to handle this when and if categories change over time!
-    # ideally old categories should not be removed, only new ones added but that removes some flexibility
+    if category_name not in parsed_dict:
+        return sum
     for sub_category in parsed_dict[category_name]:
         sum = sum + parsed_dict[category_name][sub_category]
     return sum
 
-def render_csv(parsed_budget, parsed_statement):
-    report_rows = prepare_report_rows(parsed_budget, parsed_statement)
-    with open('report.csv', 'w') as file:
+def render_csv(parsed_budget, parsed_statement, carry, remainder, statement_date: datetime):
+    report_rows = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Spend', 'Remainder'] # TODO: make global so it is shared among renderers, ideally should be configurable somehow so it isn't hardcoded!
+    report_rows.append(prepare_report_rows(parsed_budget, parsed_statement, carry, remainder))
+    filename = "report{}.csv".format(statement_date.strftime("%Y%m%d"))
+    with open(filename, 'w') as file:
         writer = csv.writer(file)
         for row in report_rows:
             writer.writerow(row)
 
+def render_html(parsed_budget, parsed_statement, carry, remainder, statement_date: datetime):
+    report_rows = prepare_report_rows(parsed_budget, parsed_statement, carry, remainder)
+    header = "Budget Spend " + statement_date.strftime("%B %Y")
+    rows_header = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Spend', 'Remainder']
+    filename = "report{}.html".format(statement_date.strftime("%Y%m%d"))
+    rendered_template = Template(filename='report_template.mako').render(rows=report_rows, header=header, rows_header=rows_header)
+    with open(filename, 'w') as file:
+        file.write(rendered_template)
+    
+
+def compute_remainder(carry, parsed_budget, parsed_statement):
+    remainder = {}
+    for category in parsed_budget:
+        remainder[category] = {}
+        for sub_category in parsed_budget[category]:
+            sub_category_budget = parsed_budget[category][sub_category]
+            sub_category_spend = Money(0, "AUD") if category not in parsed_statement or sub_category not in parsed_statement[category] else parsed_statement[category][sub_category]
+            sub_category_carry = carry[category][sub_category]
+            remainder[category][sub_category] = sub_category_budget - sub_category_spend + sub_category_carry
+    return remainder
+
+def compute_carry(prev_remainder, parsed_budget):
+    if prev_remainder == None:
+        return init_carry(parsed_budget)
+    carry = {}
+    for category in prev_remainder:
+        carry[category] = {}
+        for sub_category in prev_remainder[category]:
+            carry[category][sub_category] = prev_remainder[category][sub_category]
+
+def init_carry(parsed_budget):
+    carry = {}
+    for category in parsed_budget:
+        carry[category] = {}
+        for sub_category in parsed_budget[category]:
+            carry[category][sub_category] = Money(0, "AUD")
+    return carry   
+
+def parse_monthly_statement_date(statement):
+    statement_date_str = re.search("([0-9]{4}-[0-9]{2})", statement).group(0)
+    return datetime.strptime(statement_date_str, "%Y-%m") + relativedelta(months=1) - relativedelta(days=1)
+
+def parse_monthly_budget_date(budget):
+    monthly_budget_date_str = re.search("([0-9]{8})", budget).group(0)
+    return datetime.strptime(monthly_budget_date_str, "%Y%m%d")
+
+monthly_budget_csv_pattern = "./monthly_budget[0-9]*.csv"
+expenses_statement_csv_pattern = "./SpendAccount[a-zA-Z0-9-]*[0-9]*-[0-9]*.csv"
+
+monthly_budgets = glob.glob(monthly_budget_csv_pattern)
+
+monthly_expenses = glob.glob(expenses_statement_csv_pattern)
+
+carry = None
+remainder = None
 for statement in monthly_expenses:
     parsed_budget = parse_latest_valid_budget(monthly_budgets, statement)
     parsed_statement = parse_monthly_statement(statement)
-    # TODO: compute carry-over for each cat/sub-cat
-    # TODO: compute remainder for each cat/sub-cat
-    render_csv(parsed_budget, parsed_statement)
+    statement_date = parse_monthly_statement_date(statement)
+    carry = compute_carry(remainder, parsed_budget)
+    remainder = compute_remainder(carry, parsed_budget, parsed_statement)
+    render_csv(parsed_budget, parsed_statement, carry, remainder, statement_date)
+    render_html(parsed_budget, parsed_statement, carry, remainder, statement_date)

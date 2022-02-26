@@ -87,3 +87,11 @@ Total                                 XX                       YY         ZZ    
 - Uncategorised sub-categories will form a unique pseudo sub-category named "Uncategorised". It won't have a monthly allocation but the spend will be subtracted from the main category
 - Uncategorised categories are not supported in the MVP
   - If uncategorised categories are detected the system will throw an error and ask the user to correct the monthly statement with the error
+
+## Current Assumptions (MVP)
+
+- Categories will remain fixed (it is expected this will not change in future revisions)
+- Sub-categories also remain fixed -- in future versions the system should support changes in sub-categories such as addition or removals between reporting periods
+  - The solution to provide some flexibility is that if a sub-category needs to be removed, it should be removed from all past budgets and statements -- same for additions
+- A statement MIGHT BE missing a spend in categories and sub-categories (e.g. if there were no expenses for a category) but the budget MUST NOT be missing any categories and sub-categories included in the statement
+- Each line entry in the expenses statement MUST have a valid category and sub-category
