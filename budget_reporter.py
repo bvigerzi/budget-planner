@@ -74,8 +74,7 @@ def prepare_report_rows(parsed_budget, parsed_statement, carry, remainder):
         category_remainder = category_total(remainder, category)
         category_row = [category, "", "", "", "", ""]
         rows.append(category_row)
-        sub_category_parsed_budget = parsed_budget[category]
-        for sub_category in sub_category_parsed_budget:
+        for sub_category in parsed_budget[category]:
             sub_category_budget = Money(0, "AUD") if sub_category not in parsed_budget[category] else parsed_budget[category][sub_category]
             sub_category_spend: Money = Money(0, "AUD") if category not in parsed_statement or sub_category not in parsed_statement[category] else parsed_statement[category][sub_category]
             sub_category_carry: Money = Money(0, "AUD") if sub_category not in carry[category] else carry[category][sub_category]
@@ -95,8 +94,10 @@ def category_total(parsed_dict, category_name):
     return sum
 
 def render_csv(parsed_budget, parsed_statement, carry, remainder, statement_date: datetime):
-    report_rows = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Spend', 'Remainder'] # TODO: make global so it is shared among renderers, ideally should be configurable somehow so it isn't hardcoded!
-    report_rows.append(prepare_report_rows(parsed_budget, parsed_statement, carry, remainder))
+    report_rows = []
+    report_rows.append(rows_header.copy())
+    for row in prepare_report_rows(parsed_budget, parsed_statement, carry, remainder):
+        report_rows.append(row)
     filename = "report{}.csv".format(statement_date.strftime("%Y%m%d"))
     with open(filename, 'w') as file:
         writer = csv.writer(file)
@@ -106,7 +107,6 @@ def render_csv(parsed_budget, parsed_statement, carry, remainder, statement_date
 def render_html(parsed_budget, parsed_statement, carry, remainder, statement_date: datetime):
     report_rows = prepare_report_rows(parsed_budget, parsed_statement, carry, remainder)
     header = "Budget Spend " + statement_date.strftime("%B %Y")
-    rows_header = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Spend', 'Remainder']
     filename = "report{}.html".format(statement_date.strftime("%Y%m%d"))
     rendered_template = Template(filename='report_template.mako').render(rows=report_rows, header=header, rows_header=rows_header)
     with open(filename, 'w') as file:
@@ -155,6 +155,8 @@ expenses_statement_csv_pattern = "./SpendAccount[a-zA-Z0-9-]*[0-9]*-[0-9]*.csv"
 monthly_budgets = glob.glob(monthly_budget_csv_pattern)
 
 monthly_expenses = glob.glob(expenses_statement_csv_pattern)
+
+rows_header = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Spend', 'Remainder']
 
 carry = None
 remainder = None
