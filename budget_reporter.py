@@ -27,13 +27,15 @@ def parse_latest_valid_budget(monthly_budgets, statement):
                 category_index = row.index("Category")
                 sub_category_index = row.index("Sub-Category")
                 budget_index = row.index("Budget")
+                ignore_index = row.index("Ignore")
                 header_row = False
             else:
                 category = row[category_index]
                 sub_category = row[sub_category_index]
                 if category not in parsed_budget:
                     parsed_budget[category] = {}
-                parsed_budget[category][sub_category] = Money(int(row[budget_index]), "AUD")
+                if row[ignore_index] != "1":
+                    parsed_budget[category][sub_category] = Money(int(row[budget_index]), "AUD")
     return parsed_budget
 
 def parse_monthly_statement(statement):

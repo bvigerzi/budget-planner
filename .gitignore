@@ -2,4 +2,5 @@ SpendAccount*.csv
 monthly_budget*.csv
 report*.csv
 report*.html
+report*.pdf
 venv

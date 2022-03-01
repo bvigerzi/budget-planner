@@ -1,5 +1,7 @@
 # Automated Tools for Planning a Budget
 
+> Sacrifice now to benefit later or sacrifice later to benefit now
+
 ## Background
 
 Effective budget planning involves allocating inflows of cash over a period of time to outflows such as regular bills, expenses and investments while ensuring that you are not spending more than you have. A method to this approach is to estimate how much you would spend in each category while keeping note of how much cash you have left in your budget.
@@ -67,6 +69,8 @@ Yearly expenses (e.g. insurance charged annually, other annual subscriptions) wi
   - Must be able to link an invoice to a debit on the monthly statement to eliminate double-charging
 - Categorise same/similar descriptions to highlight where regular spending occurs (e.g. popular take-out or regularly visit same cinema)
 - Handle adding or removing categories and sub-categories
+- Spend projections -- given the actual budgeted value (e.g. $8 each month is ~$100 at an annual frequency) are we projected to spend over or under budget?
+  - This is critical for irregular category spend (e.g. yearly budgeted items) where at a monthly view it looks like we are always overspending (recent purchase) or underspending (not spent yet) without a true view of the situation
 
 ## Goals
 
@@ -95,3 +99,11 @@ Total                                 XX                       YY         ZZ    
   - The solution to provide some flexibility is that if a sub-category needs to be removed, it should be removed from all past budgets and statements -- same for additions
 - A statement MIGHT BE missing a spend in categories and sub-categories (e.g. if there were no expenses for a category) but the budget MUST NOT be missing any categories and sub-categories included in the statement
 - Each line entry in the expenses statement MUST have a valid category and sub-category
+
+## Key Goals
+
+1. See where we are over or under budget **early**
+   1. The earlier we can spot over or underspending the quicker we can adjust the budget or our spending habits
+2. Inform spending habits into the future
+   1. Spending habits are not always visible and it's hard to be conscious of spending over a period of time
+3. Guide investments when cash flows are higher (unexpected underspending or extra cash coming in)
