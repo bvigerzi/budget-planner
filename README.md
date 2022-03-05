@@ -12,6 +12,15 @@ An important thing to note is that some months may have a negative cash flow (sp
 
 The intention of this project is to keep track of cash flows over a time period and have full visibility of where cash is flowing. It is also intended to keep track of the budget and determine if it needs to be adjusted by drawing attention to over and under expenditure.
 
+## Key Goals
+
+1. See where we are over or under budget **early**
+   1. The earlier we can spot over or underspending the quicker we can adjust the budget or our spending habits
+2. Inform spending habits into the future
+   1. Spending habits are not always visible and it's hard to be conscious of spending over a period of time
+3. Guide investments when cash flows are higher (unexpected underspending or extra cash coming in)
+4. Provide structure to spending while allowing for flexibility in lifestyle habits
+
 ## Approach
 
 First, the budget is determined using [moneysmart's budget planner](https://moneysmart.gov.au/budgeting/budget-planner) (recommendation: use the excel spreadsheet for ease of use). Here, the inflows and outflows are specified along with their specific time periods. Then we can determine an appropriate time period to review if the budget is on track or if we are overspending / underspending. In this case an expenses statement of one month (e.g. bank statement or credit card statement) can be enhanced (manually for now but could be automated using classification ML) by specifying which budget category a particular purchase is associated with.
@@ -46,7 +55,9 @@ The tool should be able to determine if you are consistently overspending in a c
 
 Yearly expenses (e.g. insurance charged annually, other annual subscriptions) will make a monthly budget look bad. For 11 months out of 12 you will be over-budget in these annual expense categories. There should be a system in place to ensure false positive flags are not generated for irregular fixed expenses.
 
-#### System Operation (MVP)
+## Minimum Viable Product (MVP)
+
+### System Operation
 
 - Start of the budget (t=0) begins using earliest monthly statement using the name format: `SpendAccount[A-Z0-9]*_YYYY-MM`
 - At the start of the budget there is no carry from the previous month
@@ -57,9 +68,60 @@ Yearly expenses (e.g. insurance charged annually, other annual subscriptions) wi
   - For months that occurred BEFORE the latest budget (i.e. expense statement from 2022 Feb should use the budget defined up to the end of Feb not after)
 - Report should be printable and have visual cues to highlight over and underspending (e.g. overspending == RED while underspending == GREEN)
 
-#### Future Features (Post-MVP)
+### System Design
 
-- Spending habit flags is NOT MVP
+![MVP System Design](system_design_MVP.png)
+
+#### User Interface
+
+- Basic CLI for generating the reports
+
+#### File Reader
+
+- Basic file reader that will read from disk where the CLI is run from
+
+#### Parser
+
+- Basic CSV parser which will read the file contents and represent the budget and statements as in-memory dicts
+
+#### Compute/Calc
+
+- Uses prev. statements to compute future reports; oldest statement is t<sub>0</sub>
+- The most granular information is per month; does not include information on a daily expense view
+- All computations are stored in-memory
+
+#### Pre-Renderer and Renderer
+
+- The pre-renderer will take data from the compute/calc module and transform it into a standardised form that each renderer can understand
+- The system can support multiple renderers and for MVP will support CSV and HTML (rendered using `mako` templating library)
+
+### Report Structure
+
+```raw
+                            Monthly Allocation (Budget)   Prev. Month Remainder    Avail. Budget    Spend   Remainder   Next Month Avail.
+Category                              X                        Y                      Z                A       B         C             D
+            Sub-Categories            X                        Y                      Z                A
+
+...
+
+Total                                 XX                       YY                     ZZ               AA      BB        CC            DD
+...
+Complete Total                       XXX                       YYY                    ZZZ             AAA      BBB       CCC           DDD
+```
+
+### Current Assumptions
+
+- Categories will remain fixed (it is expected this will not change in future revisions)
+- Sub-categories also remain fixed -- in future versions the system should support changes in sub-categories such as addition or removals between reporting periods
+  - The solution to provide some flexibility is that if a sub-category needs to be removed, it should be removed from all past budgets and statements -- same for additions
+- A statement MIGHT BE missing a spend in categories and sub-categories (e.g. if there were no expenses for a category) but the budget MUST NOT be missing any categories and sub-categories included in the statement
+- Each line entry in the expenses statement MUST have a valid category and sub-category
+
+## Post-MVP
+
+### Future Features
+
+- Spending habit flags
 - Generating report for previous months retroactively (MVP should only generate report for latest reporting month)
 - Habit flag blocklist -- irregular expenses should not be flagged as discussed above
 - Prettify monthly budget report using graphs, etc
@@ -71,39 +133,3 @@ Yearly expenses (e.g. insurance charged annually, other annual subscriptions) wi
 - Handle adding or removing categories and sub-categories
 - Spend projections -- given the actual budgeted value (e.g. $8 each month is ~$100 at an annual frequency) are we projected to spend over or under budget?
   - This is critical for irregular category spend (e.g. yearly budgeted items) where at a monthly view it looks like we are always overspending (recent purchase) or underspending (not spent yet) without a true view of the situation
-
-## Goals
-
-- Lifestyle is rigid but demands flexibility to allow for spontaneous events (important: should try avoid impulsive spending habits) therefore budget should be structured but allow for flexibility on demand
-
-## Report Structure (MVP)
-
-```raw
-                            Monthly Allocation (Budget)   Carry-over    Spend   Remainder
-Category                              X                        Y          Z         A
-            Sub-Categories            X                        Y          Z         A
-
-...
-
-Total                                 XX                       YY         ZZ        AA
-```
-
-- Uncategorised sub-categories will form a unique pseudo sub-category named "Uncategorised". It won't have a monthly allocation but the spend will be subtracted from the main category
-- Uncategorised categories are not supported in the MVP
-  - If uncategorised categories are detected the system will throw an error and ask the user to correct the monthly statement with the error
-
-## Current Assumptions (MVP)
-
-- Categories will remain fixed (it is expected this will not change in future revisions)
-- Sub-categories also remain fixed -- in future versions the system should support changes in sub-categories such as addition or removals between reporting periods
-  - The solution to provide some flexibility is that if a sub-category needs to be removed, it should be removed from all past budgets and statements -- same for additions
-- A statement MIGHT BE missing a spend in categories and sub-categories (e.g. if there were no expenses for a category) but the budget MUST NOT be missing any categories and sub-categories included in the statement
-- Each line entry in the expenses statement MUST have a valid category and sub-category
-
-## Key Goals
-
-1. See where we are over or under budget **early**
-   1. The earlier we can spot over or underspending the quicker we can adjust the budget or our spending habits
-2. Inform spending habits into the future
-   1. Spending habits are not always visible and it's hard to be conscious of spending over a period of time
-3. Guide investments when cash flows are higher (unexpected underspending or extra cash coming in)
