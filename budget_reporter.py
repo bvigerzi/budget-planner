@@ -55,7 +55,7 @@ def parse_monthly_statement(statement):
                 normalised_debit = row[debit_index].replace("$", "").replace(",","")
                 normalised_credit = row[credit_index].replace("$", "").replace(",","")
                 missing_debit = normalised_debit == "" or normalised_debit == "-"
-                missing_credit = normalised_credit != "" or normalised_credit != "-"
+                missing_credit = normalised_credit == "" or normalised_credit == "-"
                 category_exists = row[category_index] != "" and row[category_index] != "-"
                 sub_category_exists = row[sub_category_index] != "" and row[sub_category_index] != "-"
                 credit_with_category = not missing_credit and category_exists and sub_category_exists
