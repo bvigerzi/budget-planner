@@ -7,18 +7,21 @@ from dateutil.relativedelta import relativedelta
 from stockholm import Money
 from mako.template import Template
 
-
-def parse_latest_valid_budget(monthly_budgets, statement):
+def find_latest_valid_budget(monthly_budgets: list[str], statement: str) -> str:
     statement_date = parse_monthly_statement_date(statement)
     latest_valid_budget = None
     for budget in sorted(monthly_budgets):
         monthly_budget_date = parse_monthly_budget_date(budget)
         if monthly_budget_date < statement_date:
             latest_valid_budget = budget
-        if latest_valid_budget is None:
-            raise Exception("No valid budget found for provided statement: {}!".format(statement))
+    if latest_valid_budget is None:
+        raise Exception("No valid budget found for provided statement: {}!".format(statement))
+    return latest_valid_budget
+
+def parse_latest_valid_budget(monthly_budgets: list[str], statement: str) -> dict:
+    latest_valid_budget = find_latest_valid_budget(monthly_budgets, statement)
     parsed_budget = {}
-    with open(budget) as file:
+    with open(latest_valid_budget) as file:
         reader = csv.reader(file)
         header_row = True
         
@@ -38,7 +41,7 @@ def parse_latest_valid_budget(monthly_budgets, statement):
                     parsed_budget[category][sub_category] = Money(int(row[budget_index]), "AUD")
     return parsed_budget
 
-def parse_monthly_statement(statement):
+def parse_monthly_statement(statement: str) -> dict:
     parsed_statement = {}
     with open(statement) as file:
         reader = csv.reader(file)
@@ -80,7 +83,7 @@ def parse_monthly_statement(statement):
 
     return parsed_statement
 
-def prepare_report_rows(parsed_budget, parsed_statement, carry, remainder, remaining_spend, next_month_available):
+def prepare_report_rows(parsed_budget: dict, parsed_statement: dict, carry: dict, remainder: dict, remaining_spend: dict, next_month_available: dict) -> list[list[str]]:
     rows = []
     complete_budget_total = Money(0, "AUD")
     complete_spend_total = Money(0, "AUD")
@@ -121,7 +124,7 @@ def prepare_report_rows(parsed_budget, parsed_statement, carry, remainder, remai
     rows.append(complete_totals_row)
     return rows
 
-def category_total(parsed_dict, category_name):
+def category_total(parsed_dict: dict, category_name: str) -> Money:
     sum = Money(0, "AUD")
     if category_name not in parsed_dict:
         return sum
@@ -129,7 +132,7 @@ def category_total(parsed_dict, category_name):
         sum = sum + parsed_dict[category_name][sub_category]
     return sum
 
-def render_csv(parsed_budget, parsed_statement, carry, remainder, remaining_spend, next_month_available, statement_date: datetime):
+def render_csv(parsed_budget: dict, parsed_statement: dict, carry: dict, remainder: dict, remaining_spend: dict, next_month_available: dict, statement_date: datetime) -> None:
     report_rows = []
     report_rows.append(rows_header.copy())
     for row in prepare_report_rows(parsed_budget, parsed_statement, carry, remainder, remaining_spend, next_month_available):
@@ -140,7 +143,7 @@ def render_csv(parsed_budget, parsed_statement, carry, remainder, remaining_spen
         for row in report_rows:
             writer.writerow(row)
 
-def render_html(parsed_budget, parsed_statement, carry, remainder, remaining_spend, next_month_available, statement_date: datetime):
+def render_html(parsed_budget: dict, parsed_statement: dict, carry: dict, remainder: dict, remaining_spend: dict, next_month_available: dict, statement_date: datetime) -> None:
     report_rows = prepare_report_rows(parsed_budget, parsed_statement, carry, remainder, remaining_spend, next_month_available)
     header = "Budget Spend " + statement_date.strftime("%B %Y")
     filename = "report{}.html".format(statement_date.strftime("%Y%m%d"))
@@ -149,7 +152,7 @@ def render_html(parsed_budget, parsed_statement, carry, remainder, remaining_spe
         file.write(rendered_template)
     
 
-def compute_remainder(carry, parsed_budget, parsed_statement):
+def compute_remainder(carry: dict, parsed_budget: dict, parsed_statement: dict) -> dict:
     remainder = {}
     for category in parsed_budget:
         remainder[category] = {}
@@ -160,7 +163,7 @@ def compute_remainder(carry, parsed_budget, parsed_statement):
             remainder[category][sub_category] = sub_category_budget - sub_category_spend + sub_category_carry
     return remainder
 
-def compute_remaining_spend(carry, parsed_budget):
+def compute_remaining_spend(carry: dict, parsed_budget: dict) -> dict:
     remaining_spend = {}
     for category in parsed_budget:
         remaining_spend[category] = {}
@@ -170,7 +173,7 @@ def compute_remaining_spend(carry, parsed_budget):
             remaining_spend[category][sub_category] = sub_category_budget + sub_category_carry
     return remaining_spend
 
-def compute_next_month_available_budget(remainder, parsed_budget):
+def compute_next_month_available_budget(remainder: dict, parsed_budget: dict) -> dict:
     next_month_budget = {}
     for category in parsed_budget:
         next_month_budget[category] = {}
@@ -180,7 +183,7 @@ def compute_next_month_available_budget(remainder, parsed_budget):
             next_month_budget[category][sub_category] = sub_category_budget + sub_category_remainder
     return next_month_budget
 
-def compute_carry(prev_remainder, parsed_budget):
+def compute_carry(prev_remainder: dict, parsed_budget: dict) -> dict:
     if prev_remainder == None:
         return init_carry(parsed_budget)
     carry = {}
@@ -190,7 +193,7 @@ def compute_carry(prev_remainder, parsed_budget):
             carry[category][sub_category] = prev_remainder[category][sub_category]
     return carry
 
-def init_carry(parsed_budget):
+def init_carry(parsed_budget: dict) -> dict:
     carry = {}
     for category in parsed_budget:
         carry[category] = {}
@@ -198,27 +201,28 @@ def init_carry(parsed_budget):
             carry[category][sub_category] = Money(0, "AUD")
     return carry   
 
-def parse_monthly_statement_date(statement):
+def parse_monthly_statement_date(statement: str) -> datetime:
     statement_date_str = re.search("([0-9]{4}-[0-9]{2})", statement).group(0)
     return datetime.strptime(statement_date_str, "%Y-%m") + relativedelta(months=1) - relativedelta(days=1)
 
-def parse_monthly_budget_date(budget):
+def parse_monthly_budget_date(budget: str) -> datetime:
     monthly_budget_date_str = re.search("([0-9]{8})", budget).group(0)
     return datetime.strptime(monthly_budget_date_str, "%Y%m%d")
 
-monthly_budget_csv_pattern = "./monthly_budget[0-9]*.csv"
-expenses_statement_csv_pattern = "./SpendAccount[a-zA-Z0-9-]*[0-9]*-[0-9]*.csv"
+monthly_budget_csv_pattern: str = "./monthly_budget[0-9]*.csv"
+expenses_statement_csv_pattern: str = "./SpendAccount[a-zA-Z0-9-]*[0-9]*-[0-9]*.csv"
 
-monthly_budgets = glob.glob(monthly_budget_csv_pattern)
+monthly_budgets: list[str] = glob.glob(monthly_budget_csv_pattern)
 
-monthly_expenses = glob.glob(expenses_statement_csv_pattern)
+monthly_expenses: list[str] = glob.glob(expenses_statement_csv_pattern)
 
-rows_header = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Avail. Budget', 'Spend', 'Remainder', 'Next Month Avail.']
+rows_header: list[str] = ['Category', 'Sub-Category', 'Monthly Allocation (Budget)', 'Prev. Month Remainder', 'Avail. Budget', 'Spend', 'Remainder', 'Next Month Avail.']
 
 carry = None
 remainder = None
 for statement in monthly_expenses:
     parsed_budget = parse_latest_valid_budget(monthly_budgets, statement)
+    print(parsed_budget)
     parsed_statement = parse_monthly_statement(statement)
     statement_date = parse_monthly_statement_date(statement)
     carry = compute_carry(remainder, parsed_budget)
