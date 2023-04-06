@@ -4,3 +4,4 @@ report*.csv
 report*.html
 report*.pdf
 venv
+.idea
