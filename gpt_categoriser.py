@@ -1,6 +1,6 @@
 import csv
 
-from budget_parser import find_latest_valid_budget
+from parser import find_latest_valid_budget
 
 
 def gpt_friendly_budget(monthly_budgets: list[str], statement: str) -> str:

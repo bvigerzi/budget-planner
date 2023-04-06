@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import glob
 
-from budget_calculator import compute_carry, compute_remainder, compute_remaining_spend, \
+from calculator import compute_carry, compute_remainder, compute_remaining_spend, \
     compute_next_month_available_budget
-from budget_parser import parse_latest_valid_budget, parse_monthly_statement, parse_monthly_statement_date
-from budget_renderer import render_csv, render_html
-from gpt_categoriser import gpt_friendly_budget, gpt_friendly_statement
+from parser import parse_latest_valid_budget, parse_monthly_statement, parse_monthly_statement_date
+from renderer import render_csv, render_html
+from gpt_categoriser import gpt_friendly_budget
 
 if __name__ == "__main__":
     monthly_budget_csv_pattern: str = "./monthly_budget[0-9]*.csv"
