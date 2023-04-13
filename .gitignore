@@ -5,3 +5,4 @@ report*.html
 report*.pdf
 venv
 .idea
+**/__pycache__
