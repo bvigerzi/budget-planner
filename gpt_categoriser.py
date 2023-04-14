@@ -1,8 +1,8 @@
 import csv
+import json
 import math
 
 import tiktoken
-from more_itertools import divide
 from budget_parser import find_latest_valid_budget
 
 MAX_TOKENS: int = 2048
@@ -50,39 +50,85 @@ def gpt_friendly_statement(statement: str) -> str:
         reader = csv.reader(file)
         for row in reader:
             row.pop(0)  # Date
-            row.pop()  # Balance
+            row.pop()  # Balance --> TODO: this was not balance, but actually credit, double check this
             output = output + ",".join(row) + "\n"
     return output
 
 
-def pre_prompt() -> str:
-    return """
-        categorise this statement
-    """  # TODO: improve this
+def gpt_friendly_statement_header(statement: str) -> str:
+    friendly_statement = gpt_friendly_statement(statement)
+    return friendly_statement.split("\n")[0]
 
 
-def categorise_statement(gpt_budget: str, gpt_statement: str) -> None:
-    pre_prompt_text = pre_prompt()
+def gpt_friendly_statement_no_header(statement: str) -> str:
+    friendly_statement = gpt_friendly_statement(statement)
+    return "\n".join(friendly_statement.split("\n")[1:])
+
+
+def pre_budget_prompt() -> str:
+    return "The below is categories and sub-categories for a personal budget."
+
+
+def pre_statement_prompt() -> str:
+    return "Using the categories and sub-categories, categorise the transactions that follow. Give the result in csv " \
+           "format. Do not provide any other text"
+
+
+def longest_row_by_token(statement_rows: list[str]) -> int:
+    clean_statement_rows = list(filter(lambda row: len(row) != 0, statement_rows))
+    tokenized_rows = list(map(lambda row: token_encoder.encode(row), clean_statement_rows))
+    token_count_per_row = list(map(lambda row: len(row), tokenized_rows))
+    token_count_per_row.sort()
+    return token_count_per_row[-1]
+
+
+def number_rows_per_prompt(statement_rows: list[str], number_tokens_for_statement: int) -> int:
+    longest_row = longest_row_by_token(statement_rows)
+    # this is a naive solution to take the longest row by token and use it to determine
+    # the number of rows we can fit in a prompt
+    # it can be optimised using some maths to compute the average size and compute the standard deviation to determine
+    # if we will exceed some margin which would be the largest possible prompt we can have
+    # as long as we are within the largest possible prompt, then that is the best fit
+    # for MVP, we do not need to perform this optimisation
+    return math.floor(number_tokens_for_statement / longest_row)
+
+
+def prepare_prompts(budget: str, gpt_statement_header: str, statement_rows: list[str],
+                    rows_per_prompt: int) -> list[str]:
+    full_pre_prompt = pre_budget_prompt() + "\n" + budget + "\n" + pre_statement_prompt() + "\n" + gpt_statement_header
+    prompts = []
+    for x in range(0, len(statement_rows) - rows_per_prompt, rows_per_prompt):
+        full_statement_for_prompt = ""
+        for y in range(0, rows_per_prompt):
+            full_statement_for_prompt = full_statement_for_prompt + statement_rows[x + y] + "\n"
+        prompts.append(full_pre_prompt + "\n" + full_statement_for_prompt)
+    return prompts
+
+
+def categorise_statement(monthly_budgets: list[str], statement_file: str) -> None:
+    gpt_budget = gpt_friendly_budget(monthly_budgets, statement_file)
+    gpt_statement_header = gpt_friendly_statement_header(statement_file)
+    gpt_statement_no_header = gpt_friendly_statement_no_header(statement_file)
+    pre_budget_prompt_text = pre_budget_prompt()
+    pre_statement_prompt_text = pre_statement_prompt()
+
     budget_tokens = token_encoder.encode(gpt_budget)
-    statement_tokens = token_encoder.encode(gpt_statement)
-    pre_prompt_tokens = token_encoder.encode(pre_prompt_text)
+    pre_budget_prompt_text_tokens = token_encoder.encode(pre_budget_prompt_text)
+    pre_statement_prompt_text_tokens = token_encoder.encode(pre_statement_prompt_text)
+    gpt_statement_header_tokens = token_encoder.encode(gpt_statement_header)
     budget_tokens_count = len(budget_tokens)
-    statement_tokens_count = len(statement_tokens)
-    pre_prompt_tokens_count = len(pre_prompt_tokens)
-    tokens_for_statement = MAX_INPUT_TOKENS - pre_prompt_tokens_count - budget_tokens_count
-    split_statement_by = math.ceil(statement_tokens_count / tokens_for_statement)
-    print("divide statement by {}".format(split_statement_by))
-    statement_split = list(map(lambda iterator: ''.join(iterator), list(divide(split_statement_by, gpt_statement))))
-    print(statement_split)
-    # Requirements:
-    # 1. need the header for each sub_statement -> extract it from gpt_statement and prepend on each iteration
-    # 2. this will change the calculations slightly
-    # 3. also need to re-think calculations because we should split exactly on newlines rather than by tokens
-    # 4. this is necessary because we cannot have a partial row sent to GPT
+    pre_budget_prompt_text_tokens_count = len(pre_budget_prompt_text_tokens)
+    pre_statement_prompt_text_tokens_count = len(pre_statement_prompt_text_tokens)
+    gpt_statement_header_tokens_count = len(gpt_statement_header_tokens)
 
-    # split gpt_statement by split_statement_by and iterate over the substrings
-    # for each substring_statement:
-    # prompt = pre_prompt_text + gpt_budget + substring_statement
-    # query openai API completions, parse response
-    # hold onto response, it will form the partial categorised transactions
-    return
+    tokens_for_statement = MAX_INPUT_TOKENS - pre_budget_prompt_text_tokens_count - budget_tokens_count - \
+                           pre_statement_prompt_text_tokens_count - gpt_statement_header_tokens_count
+
+    statement_rows: list[str] = gpt_statement_no_header.split("\n")
+    rows_per_prompt = number_rows_per_prompt(statement_rows, tokens_for_statement)
+    prompts = prepare_prompts(gpt_budget, gpt_statement_header, statement_rows, rows_per_prompt)
+    # TODO:
+    # iterate over prompts, calling openai API completions
+    # for each completions response, parse it and start re-building the transactions csv
+    print(json.dumps(prompts[0]))
+    print(len(prompts))
