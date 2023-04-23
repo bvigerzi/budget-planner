@@ -129,6 +129,25 @@ def prepare_prompts(budget: str, gpt_statement_header: str, statement_rows: list
     return prompts
 
 
+def rebuild_categorised_statement(categorised_rows: list[list[str]], statement_file: str) -> None:
+    rebuilt_csv = ""
+    with open(statement_file) as file:
+        reader = csv.reader(file)
+        row_count = 0
+        for row in reader:
+            rebuilt_csv = rebuilt_csv + ",".join(row)
+            if row_count < len(categorised_rows):
+                categorised_row = categorised_rows[row_count]
+                category_columns = categorised_row[-2:]
+                print(categorised_row)
+                rebuilt_csv = rebuilt_csv + "," + ",".join(category_columns)
+            row_count = row_count + 1
+    print(rebuilt_csv)
+    # note: this is a partial rebuilding (i.e. response_text_rows is a partial of transactions statement file)
+    # we need to perform this operation for a list of a list of a list of strs
+    # actually we could just flatmap all the responses into a list of lists which have all the transactions :)
+
+
 def categorise_statement(monthly_budgets: list[str], statement_file: str) -> None:
     gpt_budget = gpt_friendly_budget(monthly_budgets, statement_file)
     gpt_statement_header = gpt_friendly_statement_header(statement_file)
@@ -162,8 +181,14 @@ def categorise_statement(monthly_budgets: list[str], statement_file: str) -> Non
 
     # for development, before calling the API, just work with a sample response to see if we can do the work after
     # getting the API response
-    print(len(prompts))
-    print(json.dumps(prompts[0]))
-    print("tokens:" + str(len(token_encoder.encode(prompts[0]))))
-    print(json.dumps(prompts[1]))
-    print("tokens:" + str(len(token_encoder.encode(prompts[1]))))
+
+    # response_text_rows = list(map(lambda row: row.split(","), response_text.split("\n")))
+    # print(response_text_rows)
+
+    # rebuild_categorised_statement(response_text_rows, statement_file)
+    #
+    # print(len(prompts))
+    # print(json.dumps(prompts[0]))
+    # print("tokens:" + str(len(token_encoder.encode(prompts[0]))))
+    # print(json.dumps(prompts[1]))
+    # print("tokens:" + str(len(token_encoder.encode(prompts[1]))))
