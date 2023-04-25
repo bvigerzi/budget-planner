@@ -1,11 +1,17 @@
 import csv
-import json
 import math
 import functools
 import statistics
 
 import tiktoken
 from budget_parser import find_latest_valid_budget
+import os
+import openai
+from itertools import chain
+
+from file_paths import EXPENSES_STATEMENT_PRE_CATEGORISE_DIR, EXPENSES_STATEMENT_POST_CATEGORISE_DIR
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 MAX_TOKENS: int = 2048
 MAX_INPUT_TOKENS: int = int(MAX_TOKENS / 2)
@@ -75,12 +81,13 @@ def gpt_friendly_statement_no_header(statement: str) -> str:
 
 
 def pre_budget_prompt() -> str:
-    return "The below is categories and sub-categories for a personal budget."
+    return "The below is categories and sub-categories for a personal budget.\n"
 
 
 def pre_statement_prompt() -> str:
     return "Using the categories and sub-categories, categorise the transactions that follow. Give the result in csv " \
-           "format. Do not provide any other text"
+           "format as: Description,Debit,Credit,Category,Sub-Category. Do not provide any other text. Output the " \
+           "transactions in the order received.\n"
 
 
 def longest_row_by_token(statement_rows: list[str]) -> int:
@@ -130,22 +137,27 @@ def prepare_prompts(budget: str, gpt_statement_header: str, statement_rows: list
 
 
 def rebuild_categorised_statement(categorised_rows: list[list[str]], statement_file: str) -> None:
-    rebuilt_csv = ""
+    rebuilt_csv = []
     with open(statement_file) as file:
         reader = csv.reader(file)
         row_count = 0
         for row in reader:
-            rebuilt_csv = rebuilt_csv + ",".join(row)
-            if row_count < len(categorised_rows):
-                categorised_row = categorised_rows[row_count]
+            if row_count is 0:
+                categorised_row = ["Category", "Sub-Category"]
+                row.extend(categorised_row)
+            else:
+                categorised_row: list[str] = categorised_rows[row_count - 1]
                 category_columns = categorised_row[-2:]
-                print(categorised_row)
-                rebuilt_csv = rebuilt_csv + "," + ",".join(category_columns)
+                row.extend(category_columns)
+            rebuilt_csv.append(row)
             row_count = row_count + 1
+        print("csv rows:{}".format(row_count))
     print(rebuilt_csv)
-    # note: this is a partial rebuilding (i.e. response_text_rows is a partial of transactions statement file)
-    # we need to perform this operation for a list of a list of a list of strs
-    # actually we could just flatmap all the responses into a list of lists which have all the transactions :)
+    file_name = statement_file[len(EXPENSES_STATEMENT_PRE_CATEGORISE_DIR):]
+    categorised_file_name = EXPENSES_STATEMENT_POST_CATEGORISE_DIR + file_name
+    with open(categorised_file_name, "w") as file:
+        writer = csv.writer(file)
+        writer.writerows(rebuilt_csv)
 
 
 def categorise_statement(monthly_budgets: list[str], statement_file: str) -> None:
@@ -170,25 +182,27 @@ def categorise_statement(monthly_budgets: list[str], statement_file: str) -> Non
     statement_rows: list[str] = gpt_statement_no_header.split("\n")
     rows_per_prompt = number_rows_per_prompt(statement_rows, tokens_for_statement)
     prompts = prepare_prompts(gpt_budget, gpt_statement_header, statement_rows, rows_per_prompt)
-    # TODO:
-    # iterate over prompts, calling openai API completions
-    # for each completions response, parse it and start re-building the transactions csv
-    # ideally, just collect the completions responses in a list and re-build the transactions csv piece by piece
-    # (i.e. iterate over the original transactions file, and for each iteration grab a list item returned from
-    # completions API
-    # attach the categories and subcategories onto the transaction csv row and get ready to print it out
-    # to a new CSV file at the end
 
-    # for development, before calling the API, just work with a sample response to see if we can do the work after
-    # getting the API response
+    all_categorised_rows = list(openai_completions_generator(prompts))
+    print(all_categorised_rows)
+    all_rows_flattened = list(chain.from_iterable(all_categorised_rows))
+    print(all_rows_flattened)
+    print("rows:{}".format(len(all_rows_flattened)))
 
-    # response_text_rows = list(map(lambda row: row.split(","), response_text.split("\n")))
-    # print(response_text_rows)
+    rebuild_categorised_statement(all_rows_flattened, statement_file)
 
-    # rebuild_categorised_statement(response_text_rows, statement_file)
-    #
-    # print(len(prompts))
-    # print(json.dumps(prompts[0]))
-    # print("tokens:" + str(len(token_encoder.encode(prompts[0]))))
-    # print(json.dumps(prompts[1]))
-    # print("tokens:" + str(len(token_encoder.encode(prompts[1]))))
+
+def openai_completions_generator(prompts: list[str]) -> list[list[str]]:
+    for prompt in prompts:
+        print(prompt)
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=prompt,
+            max_tokens=2048
+        )
+        print(response)
+        response_text = response.choices[0].text  # TODO: error handling!
+        print(response_text)
+        # TODO: refer to logs/openai_freakout.txt for conditions where the outputted text is not perfect
+        # TODO: we should be able to handle these cases if possible
+        yield list(map(lambda row: row.split(","), response_text.split("\n")))

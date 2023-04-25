@@ -6,28 +6,30 @@ from calculator import compute_carry, compute_remainder, compute_remaining_spend
 from budget_parser import parse_latest_valid_budget, parse_monthly_statement, parse_monthly_statement_date
 from renderer import render_csv, render_html
 from gpt_categoriser import categorise_statement
+from file_paths import MONTHLY_BUDGET_DIR, MONTHLY_BUDGET_CSV_PATTERN, EXPENSES_STATEMENT_PRE_CATEGORISE_DIR, \
+    EXPENSES_STATEMENT_POST_CATEGORISE_DIR, EXPENSES_STATEMENT_CSV_PATTERN
 
 if __name__ == "__main__":
-    monthly_budget_csv_pattern: str = "monthly_budget[0-9]*.csv"
-    expenses_statement_csv_pattern: str = "SpendAccount[a-zA-Z0-9-]*[0-9]*-[0-9]*.csv"
-    monthly_budget_dir = "./"
-    expenses_statement_pre_categorise_dir = "./pre-categorise/"
-    expenses_statement_post_categorise_dir = "./post-categorise/"
-
-    monthly_budgets: list[str] = glob.glob(monthly_budget_dir + monthly_budget_csv_pattern)
+    monthly_budgets: list[str] = glob.glob(MONTHLY_BUDGET_DIR + MONTHLY_BUDGET_CSV_PATTERN)
 
     uncategorised_monthly_expenses: list[str] = glob.glob(
-        "{0}{1}".format(expenses_statement_pre_categorise_dir, expenses_statement_csv_pattern))
+        "{0}{1}".format(EXPENSES_STATEMENT_PRE_CATEGORISE_DIR, EXPENSES_STATEMENT_CSV_PATTERN))
     categorised_monthly_expenses: list[str] = glob.glob(
-        "{0}{1}".format(expenses_statement_post_categorise_dir, expenses_statement_csv_pattern))
+        "{0}{1}".format(EXPENSES_STATEMENT_POST_CATEGORISE_DIR, EXPENSES_STATEMENT_CSV_PATTERN))
 
     carry = None
     remainder = None
 
+    categorised_statement_files = list(
+        map(lambda categorised_statement: categorised_statement[len(EXPENSES_STATEMENT_POST_CATEGORISE_DIR):],
+            categorised_monthly_expenses))
+
     for statement in uncategorised_monthly_expenses:
-        # TODO: only perform this for expenses not already in post-categorise to avoid repeating categorisation each
-        #  time
-        categorise_statement(monthly_budgets, statement)
+        uncategorised_statement = statement[len(EXPENSES_STATEMENT_PRE_CATEGORISE_DIR):]
+        if uncategorised_statement not in categorised_statement_files:
+            categorise_statement(monthly_budgets, statement)
+
+# TODO: wait for async operations -- writing file has IO delay which needs to be factored in
 
     for statement in categorised_monthly_expenses:
         # Parse budget and expenses step

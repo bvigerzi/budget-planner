@@ -6,3 +6,4 @@ report*.pdf
 venv
 .idea
 **/__pycache__
+logs
