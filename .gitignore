@@ -6,4 +6,7 @@ report*.pdf
 venv
 .idea
 **/__pycache__
+*.egg-info/
+dist/
+build/
 logs
